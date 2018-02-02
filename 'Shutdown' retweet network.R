@@ -1,3 +1,5 @@
+
+# just a test
 source("twitter_authenticate.R")
 
 tweets = searchTwitter("shutdown", n=1000)
