@@ -6,6 +6,8 @@ retweet <- lapply(id, retweeters, n=20)
 retweet
 s <- strsplit(retweets, ": ")
 
+# added a line
+
 # first element of each vector is the user name
 getFirstElement <- function(x) {
   x[1]
