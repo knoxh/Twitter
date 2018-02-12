@@ -2,9 +2,44 @@ install.packages("rtweet")
 library(rtweet)
 library(httpuv)
 
-source("rtweet_authenticate.R")
 
-tweetsdf <- search_tweets("Tom Brady", n=180, include_rts = TRUE)
+
+
+#tweetsdf <- search_tweets("Tom Brady", n=180, include_rts = TRUE)
+#lookup_tweets("YahooSports")
+who_retweet <- get_retweeters(status_id="962217906242293760", n=100)
+
+
+
+# TO DO: for each retweeter 
+
+for (i in 1:100){
+  # get the current retweeter ID 
+  retweeter <- as.character(who_retweet$user_id)[i]
+
+  followers <- tryCatch(get_followers(retweeter, n=4000, retryonratelimit = T))
+  
+  limits <- rate_limit("followers/ids")
+  cat(nrow(followers))
+}
+
+followers_list = list()
+for(j in 1:nrow(followers)){
+  followers_list[j] <- as.list(followers$user_id)[j]
+}
+
+who_retweet_list <- as.list(who_retweet[,1])
+common <- intersect(who_retweet_list, followers_list)
+cat("common followers: ")
+cat(common)
+cat('\n')
+
+if (length(common) >0) {
+  e <- cbind(user$user_id, common)
+  edgeList <- rbind(edgeList, e)
+}
+
+
 
 tweetstext <- tweetsdf$text
 #for (i in 1:nrow(tweetsdf)) {
@@ -19,37 +54,16 @@ length(tweetstext)
 who_retweet = list()
 who_post = list()
 # Do i have to specify the element of the list? Is an if-else statement not the best?
-for(i in 1:nrow(tweetsdf)){
-  if (tweetsdf[i,11] == TRUE) {
-    who_retweet <- append(who_retweet, tweetsdf[i,]$screen_name)
-  } else {
-    who_post <- append(who_post, tweetsdf[i,]$screen_name)
-  }
-}
 
-tweets_txt = sapply(tweetstext, function(x) x$getText())
-grep("(RT|via)((?:\\b\\W*@\\w+)+)", tweetstext, ignore.case=TRUE, value=TRUE)
-rt_patterns = grep("(RT|via)((?:\\b\\W*@\\w+)+)", tweets_txt, ignore.case=TRUE)
-who_retweet = as.list(1:length(rt_patterns))
-who_post = as.list(1:length(rt_patterns))
+index <- tweetsdf$is_retweet
+who_retweet <- tweetsdf$screen_name[index]
+who_post <- tweetsdf$screen_name[!index]
 
-for (i in 1:length(rt_patterns))
-{ 
-  # get tweet with retweet entity
-  twit = tweets[[rt_patterns[i]]]
-  twitinfo <- tweets_data(twit)
-  # get retweet source 
-  poster = str_extract_all(twit$getText(),
-                           "(RT|via)((?:\\b\\W*@\\w+)+)") 
-  #remove ':'
-  poster = gsub(":", "", unlist(poster)) 
-  # name of retweeted user
-  who_post[[i]] = gsub("(RT @|via @)", "", poster, ignore.case=TRUE) 
-  # name of retweeting user 
-  who_retweet[[i]] = rep(twit$screen_name, length(poster)) 
-}
 
-who_post = unlist(who_post)
+
+#################################################
+
+
 who_retweet = unlist(who_retweet)
 userList <- lookup_users(who_retweet)
 

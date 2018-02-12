@@ -1,4 +1,4 @@
-source("twitter_authenticate.R")
+
 
 library(rtweet)
 library(igraph)
@@ -37,22 +37,5 @@ for(i in 1:length(userList))
   who_retweet_id[[i]] = rep(userList[[i]]$getId())
 }
 user_follower_ids=list()
-#Need to check why there is an error after this part
-index <- 1:25
-edgeList <- NULL
-for (i in index){
-  
-  cat("User number ", i, "\n")
-  user <- userList[[i]]
-  user_follower_ids = user$getFollowerIDs(n=20, retryonratelimit = 15)
-  
-  common <- intersect(who_retweet_id, user_follower_ids)
-  cat("common followers: ")
-  cat(common)
-  cat('\n')
-  
-  if (length(common) >0) {
-    e <- cbind(user$id, common)
-    edgeList <- rbind(edgeList, e)
-  }
-}
+
+
