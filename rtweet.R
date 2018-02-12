@@ -1,20 +1,14 @@
 install.packages("rtweet")
 library(rtweet)
-library(httpuv)
 
 
-
-
-#tweetsdf <- search_tweets("Tom Brady", n=180, include_rts = TRUE)
-#lookup_tweets("YahooSports")
 who_retweet <- get_retweeters(status_id="962217906242293760", n=100)
-
 
 
 # TO DO: for each retweeter 
 
 for (i in 1:100){
-  # get the current retweeter ID 
+  # get retweeter ID 
   retweeter <- as.character(who_retweet$user_id)[i]
 
   followers <- tryCatch(get_followers(retweeter, n=4000, retryonratelimit = T))
@@ -23,23 +17,26 @@ for (i in 1:100){
   cat(nrow(followers))
 }
 
+# Convert followers to a list of ID's of the followers
 followers_list = list()
 for(j in 1:nrow(followers)){
   followers_list[j] <- as.list(followers$user_id)[j]
 }
 
+# see if any of the retweeters follow each other
 who_retweet_list <- as.list(who_retweet[,1])
 common <- intersect(who_retweet_list, followers_list)
 cat("common followers: ")
 cat(common)
 cat('\n')
 
+# edge list
 if (length(common) >0) {
   e <- cbind(user$user_id, common)
   edgeList <- rbind(edgeList, e)
 }
 
-
+#############################################################################
 
 tweetstext <- tweetsdf$text
 #for (i in 1:nrow(tweetsdf)) {
