@@ -1,21 +1,87 @@
-install.packages("rtweet")
+
 library(rtweet)
+library(readr)
+library(igraph)
+
+status_id <- "962217906242293760"
+
+who_retweet <- get_retweeters(status_id=status_id, n=100)
+
+directory <- paste0("statusId_", status_id)
+
+dir.create(directory)
+
+retweetersFile <- paste0(directory, "/retweeters.txt")
+
+write.table(who_retweet, row.names = FALSE, file = retweetersFile)
 
 
-who_retweet <- get_retweeters(status_id="962217906242293760", n=100)
-
-
-# TO DO: for each retweeter 
-
+# make files of followers for 100 retweeters
 for (i in 1:100){
   # get retweeter ID 
   retweeter <- as.character(who_retweet$user_id)[i]
 
-  followers <- tryCatch(get_followers(retweeter, n=4000, retryonratelimit = T))
+  followers <- get_followers(retweeter, n=4000, retryonratelimit = T)
+  fileName <- paste0(directory, "/userId_", retweeter, ".txt")
+  write.table(followers, file = fileName, row.names = FALSE) 
   
   limits <- rate_limit("followers/ids")
   cat(nrow(followers))
 }
+
+
+
+# Assignment 1: read in retweeters (done) and follower information from
+# the current directory to create the edge list
+
+retweeters <- read_csv(retweetersFile, col_types = cols(user_id = col_character()))
+View(retweeters)
+
+searchStr <- paste0(directory, "/userId*")
+files <- Sys.glob(searchStr)
+
+# get a vector of retweeters from the files
+
+followers <- read_csv(files[1], col_types = cols(user_id = col_character()))
+
+# vector with retweeter IDs
+retweetersID <- c()
+for(i in 1:94){
+retweetersID <- append(retweetersID, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
+}
+
+# intersect the files and the list of retweeters
+for (i in 1:94){
+  followers <- read_csv(files[i], col_types = cols(user_id = col_character()))
+  common <- intersect(followers$user_id, retweetersID)
+  
+  # edge list
+  if (length(common) >0) {
+    e <- cbind(retweetersID[i], common)
+    edgeList <- rbind(edgeList, e)
+  }
+} 
+# graph from edge list
+g <- graph_from_edgelist(edgeList)
+plot(g, layout = layout_with_fr, vertex.label = NA)
+
+# Assignment 2 (harder): write function 
+
+
+
+alreadyHave <- strsplit(files, "userId_")
+alreadyHave <- sapply(alreadyHave, function(x)x[[2]])
+alreadyHave <- gsub(".txt", "", alreadyHave)
+need <- setdiff(retweeters$user_id, alreadyHave)
+
+# have to write function
+getFollowers <- function(status_id, completed = "") {
+  
+}
+
+
+##############################
+q()
 
 # Convert followers to a list of ID's of the followers
 followers_list = list()
@@ -25,10 +91,10 @@ for(j in 1:nrow(followers)){
 
 # see if any of the retweeters follow each other
 who_retweet_list <- as.list(who_retweet[,1])
-common <- intersect(who_retweet_list, followers_list)
-cat("common followers: ")
+
 cat(common)
-cat('\n')
+cat('\n')common <- intersect(who_retweet_list, followers_list)
+cat("common followers: ")
 
 # edge list
 if (length(common) >0) {
@@ -39,9 +105,6 @@ if (length(common) >0) {
 #############################################################################
 
 tweetstext <- tweetsdf$text
-#for (i in 1:nrow(tweetsdf)) {
-#  tweetstext[[i]] <- tweetsdf[i,5]
-#}
 
 # READ ME: length=200, but I searched for 180 tweets? Is it a data frame?
 length(tweetstext)
