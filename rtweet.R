@@ -2,17 +2,25 @@ library(rtweet)
 library(readr)
 library(igraph)
 
+
 status_id <- "962217906242293760"
+originalTweet <- lookup_statuses(status_id)
+originalTweeter <- data.frame(user_id = originalTweet$user_id)
 
 who_retweet <- get_retweeters(status_id=status_id, n=100)
+who_retweet$user_id <- c(who_retweet$user_id, originalUser)
+
 
 directory <- paste0("statusId_", status_id)
 
 dir.create(directory)
 
 retweetersFile <- paste0(directory, "/retweeters.txt")
-
 write.table(who_retweet, row.names = FALSE, file = retweetersFile)
+
+
+originalTweeterFile <- paste0(directory, "/originalTweeter.txt")
+write.table(originalTweeter, row.names = FALSE, file = originalTweeterFile)
 
 
 # make files of followers for 100 retweeters
@@ -44,6 +52,7 @@ for(i in 1:94){
 retweetersID <- append(retweetersID, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
 }
 
+
 # intersect the files and the list of retweeters
 for (i in 1:94){
   followers <- read_csv(files[i], col_types = cols(user_id = col_character()))
@@ -60,33 +69,34 @@ for (i in 1:94){
 g <- graph_from_edgelist(edgeList)
 plot(g, layout = layout_with_fr, vertex.label = NA)
 
+who_retweet <- initializeFiles(status_id)
+newFollowers <- getFollowers(who_retweet)
+edgeList <- createEdgeList(newRetweeters)
+
 
 # Assignment 2 (harder): write function 
 
-getFollowers <- function(status_id, completed = "") {
+initializeFiles <- function(status_id) {
   # get retweeters and create directory if it does not exist
   # FIX: check if directory exists
+  originalTweet <- lookup_statuses(status_id)
+  originalTweeter <- data.frame(user_id = originalTweet$user_id)
+  
   who_retweet <- get_retweeters(status_id=status_id)
+  who_retweet$user_id <- c(who_retweet$user_id, originalTweeter)
   directory <- paste0("statusId_", status_id)
   dir.create(directory)
+  
+  originalTweeterFile <- paste0(directory, "/originalTweeter.txt")
+  write.table(originalTweeter, row.names = FALSE, file = originalTweeterFile)
+  
   retweetersFile <- paste0(directory, "/retweeters.txt")
   write.table(who_retweet, row.names = FALSE, file = retweetersFile)
-  
-  # get followers of retweeters and put in files
-  # FIX: should skip over retweeters where followers are already determined
-  for (i in 1:nrow(who_retweet)){
-    retweeter <- as.character(who_retweet$user_id)[i]
-    followers <- get_followers(retweeter, retryonratelimit = T)
-    fileName <- paste0(directory, "/userId_", retweeter, ".txt")
-    write.table(followers, file = fileName, row.names = FALSE) 
-    limits <- rate_limit("followers/ids")
-    cat(nrow(followers))
-  }
+  return(who_retweet)
 }
 
 
-# edge list function
-createEdgeList <- function(status_id, createDirectory){
+getFollowers <- function(who_retweet){
   searchStr <- paste0(directory, "/userId*")
   files <- Sys.glob(searchStr)
   
@@ -96,8 +106,39 @@ createEdgeList <- function(status_id, createDirectory){
     retweetersID <- append(retweetersID, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
   }
   
+  fileIDs <- c()
+  for(i in 1:length(files)){
+    fileIDs <- append(fileIDs, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
+  }
+  
+  # find out who doesn't already have a file of followers
+  newRetweeters <- setdiff(retweetersID, fileIDs)
+ 
+  for (i in 1:nrow(length(newRetweeters))){
+    retweeter <- as.character(newRetweeters[i])
+    followers <- get_followers(retweeter, retryonratelimit = T)
+    fileName <- paste0(directory, "/userId_", retweeter, ".txt")
+    write.table(followers, file = fileName, row.names = FALSE) 
+    limits <- rate_limit("followers/ids")
+    cat(nrow(followers))
+  }
+  return(newRetweeters)
+}
+  
+
+# edge list function
+createEdgeList <- function(newRetweeters){
+  searchStr <- paste0(directory, "/userId*")
+  files <- Sys.glob(searchStr)
+  
+  # vector of retweeter IDs
+  retweetersID <- c()
+  for(i in 1:newRetweeters[i]){
+    retweetersID <- append(retweetersID, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
+  }
+  
   # intersect the files and the list of retweeters
-  for (i in 1:nrow(who_retweet)){
+  for (i in 1:length(retweetersID)){
     followers <- read_csv(files[i], col_types = cols(user_id = col_character()))
     common <- intersect(followers$user_id, retweetersID)
     
@@ -107,9 +148,11 @@ createEdgeList <- function(status_id, createDirectory){
       edgeList <- rbind(edgeList, e)
     }
   } 
+  return(edgeList)
 }
-
-
+g <- graph_from_edgelist(edgeList)
+g2 <- graph.edgelist(edgeList, directed = FALSE)
+plot(g2)
 ##############################
 q()
 
