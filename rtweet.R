@@ -2,29 +2,24 @@ library(rtweet)
 library(readr)
 library(igraph)
 library(dplyr)
+library(rgexf)
 
+make_status_directory <- function(path = getwd(), status_id) {
+  directory <- paste0(path,"/statusId_",status_id)
+  dir.create(directory)
+  return(directory)
+}
 
-status_id <- "975714756064575489"
-
-# calling functions - are the arguments correct?
-
-who_retweet <- initializeFiles(status_id)
-newFollowers <- getFollowers(who_retweet)
-edgeList <- createEdgeList(newRetweeters)
-
-
-# FUNCTIONS
-
-initializeFiles <- function(status_id) {
-  # get retweeters and create directory if it does not exist
-  # FIX: check if directory exists
+originalTweeter <- function(status_id){
   originalTweet <- lookup_statuses(status_id)
   originalTweeter <- data.frame(user_id = originalTweet$user_id)
+  return(originalTweeter)
+}
+
+initializeFiles <- function(status_id, originalTweeter, directory) {
   
   who_retweet <- get_retweeters(status_id=status_id)
   who_retweet <- bind_rows(originalTweeter, who_retweet)
-  directory <- paste0("statusId_", status_id)
-  dir.create(directory)
   
   originalTweeterFile <- paste0(directory, "/originalTweeter.txt")
   write.table(originalTweeter, row.names = FALSE, file = originalTweeterFile)
@@ -36,51 +31,38 @@ initializeFiles <- function(status_id) {
   return(who_retweet)
 }
 
-# does directory have to be a parameter for this function?
-getFollowers <- function(who_retweet, directory){
+# get the retweeters from "/statusId_XXXX/userId_XXXX.txt"
+getRetweeters <- function(status_id, directory) {
   
+  # read all the userId files and get the userIds only, and return it
   searchStr <- paste0(directory, "/userId*")
   files <- Sys.glob(searchStr)
+  retweeters <- strsplit(files, "userId_")
+  retweeters <- gsub(".txt", "", sapply(retweeters, function(x) x[[2]]))
+  return(retweeters)
+}
+
+
+getFollowers <- function(who_retweet, retweeters, directory){
+  retweetersID <- who_retweet$user_id
   
-  # vector of retweeter IDs
-  retweetersID <- c()
-  for(i in 1:nrow(who_retweet)){
-    retweetersID <- append(retweetersID, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
-  }
+  newRetweeters <- setdiff(retweetersID, retweeters)
   
-  fileIDs <- c()
-  for(i in 1:length(files)){
-    fileIDs <- append(fileIDs, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
-  }
+  cat("identified ", length(newRetweeters), " new retweeters\n")
   
-  # find out who doesn't already have a file of followers
-  # I don't think i did this right - should newRetweeters be in the first function before new files are created?
-  newRetweeters <- setdiff(retweetersID, fileIDs)
- 
-  for (i in 1:nrow(newRetweeters)){
-    retweeter <- as.character(newRetweeters$user_id[i])
+  for (i in 1:length(newRetweeters)){
+    retweeter <- as.character(newRetweeters[i])
     followers <- get_followers(retweeter, retryonratelimit = T)
     fileName <- paste0(directory, "/userId_", retweeter, ".txt")
     write.table(followers, file = fileName, row.names = FALSE) 
     limits <- rate_limit("followers/ids")
     cat(nrow(followers))
   }
-  
-  
-  return(newRetweeters)
+  return(retweetersID)
 }
   
-
 # edge list function
-createEdgeList <- function(newRetweeters){
-  searchStr <- paste0(directory, "/userId*")
-  files <- Sys.glob(searchStr)
-  
-  # vector of retweeter IDs
-  retweetersID <- c()
-  for(i in 1:nrow(who_retweet)){
-    retweetersID <- append(retweetersID, gsub(".txt", "", strsplit(files[i], "userId_")[[1]][2]))
-  }
+createEdgeList <- function(retweetersID){
   
   # intersect the files and the list of retweeters
   for (i in 1:length(retweetersID)){
@@ -95,29 +77,11 @@ createEdgeList <- function(newRetweeters){
   } 
   return(edgeList)
 }
-g <- graph_from_edgelist(edgeList)
-g2 <- graph.edgelist(edgeList, directed = FALSE)
-plot(g2)
 
-
-##############################
-
-
-# Convert followers to a list of ID's of the followers
-followers_list = list()
-for(j in 1:nrow(followers)){
-  followers_list[j] <- as.list(followers$user_id)[j]
-}
-
-# see if any of the retweeters follow each other
-who_retweet_list <- as.list(who_retweet[,1])
-common <- intersect(who_retweet_list, followers_list)
-cat(common)
-cat('\n')
-cat("common followers: ")
-
-# edge list
-if (length(common) >0) {
-  e <- cbind(user$user_id, common)
-  edgeList <- rbind(edgeList, e)
+graph <- function(edgeList){
+  g <- graph.edgelist(edgeList, directed = FALSE)
+  V(g)$color <- "black"
+  V(g)[originalTweeter$user_id]$color <- "red"
+  graph <- plot(g)
+  return(graph)
 }
