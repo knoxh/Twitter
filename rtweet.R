@@ -74,6 +74,7 @@ createEdgeList <- function(retweetersID){
       e <- cbind(retweetersID[i], common)
       edgeList <- rbind(edgeList, e)
     }
+    colnames(edgeList) <- c("source","target")
   } 
   return(edgeList)
 }
