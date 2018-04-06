@@ -1,8 +1,20 @@
+source("function_call.R")
 library(rtweet)
 library(readr)
 library(igraph)
 library(dplyr)
 library(rgexf)
+
+status_id <- "976978524740386816"
+
+# calling functions 
+directory <- make_status_directory(path=getwd(), status_id)
+originalTweeter <- originalTweeter(status_id)
+who_retweet <- initializeFiles(status_id, originalTweeter, directory)
+retweeters <- getRetweeters(status_id, directory)
+retweetersID <- getFollowers(who_retweet, status_id)
+edgeList <- createEdgeList(retweetersID)
+network <- graph(edgeList)
 
 make_status_directory <- function(path = getwd(), status_id) {
   directory <- paste0(path,"/statusId_",status_id)
