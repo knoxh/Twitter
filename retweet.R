@@ -4,10 +4,41 @@ library(igraph)
 library(dplyr)
 library(rgexf)
 
-# trying to search for specfic tweet - not working
-search <- search_tweets('"This is my friend\'s daughter\'s cat. His name is Frank. And basically I think he should be trending."', n=20000, include_rts = TRUE, retryonratelimit = TRUE)
-searchtext <- search$text
-retweets_text = grep("RT|via)((?:\\b\\W*@\\w+)+)", searchtext, ignore.case = TRUE)
+# search for specfic tweet
+
+rt <- function(search){
+  searchtext <- search$text
+  retweets_text = grep("RT|via)((?:\\b\\W*@\\w+)+)", searchtext, ignore.case = TRUE)
+  return(retweets_text)
+}
+
+non_retweets <- function(search, retweets_text){
+  non_retweets <- setdiff(1:nrow(search), retweets_text)
+  return(non_retweets)
+}
+
+weird_tweets <- function(search, non_retweets){
+  q <- search$is_quote[non_retweets]
+  t <- cbind(q, non_retweets)
+  weird_tweets = vector(mode="character", length=0)
+  quote = vector(mode="character", length=0)
+  for(i in 1:length(q)){
+    if(q[i]==FALSE){
+      weird_tweets <- append(weird_tweets, as.character(t[i,2]))
+    }
+  }
+  return(weird_tweets)
+}
+
+rtweetid <- function(search, retweets_text){
+  who_retweet <- as.list(search$user_id[retweets_text])
+  # want to add the quotes too, but it won't work
+  #quote <- setdiff(non_retweets,weird_tweets)
+  #who_retweet <- append(rtweetid, quote)
+  return(who_retweet)
+  }
+
+###################################################################
 
 make_status_directory <- function(path = getwd(), status_id) {
   directory <- paste0(path,"/statusId_",status_id)
@@ -57,11 +88,19 @@ getFollowers <- function(who_retweet, retweeters, directory){
   
   for (i in 1:length(newRetweeters)){
     retweeter <- as.character(newRetweeters[i])
+    
+    ## get the number of followers for each retweeter
+    ## if user has >= 75000, display message stating they have more than
+    ## 75,000 followers
+    
     followers <- get_followers(retweeter, n= 75000, retryonratelimit = TRUE)
     fileName <- paste0(directory, "/userId_", retweeter, ".txt")
     write.table(followers, file = fileName, row.names = FALSE) 
     limits <- rate_limit("followers/ids")
     cat("Number of followers for: ", retweeter, nrow(followers), "  ")
+    follow_count <- function(retweeter){return(lookup_users(retweeter)$followers_count)}
+    if(follow_count(retweeter) > 75000){
+      cat("User has more than 75000 followers")}
   }
   return(retweetersID)
 }
@@ -86,7 +125,7 @@ createEdgeList <- function(directory, retweetersID){
   return(edgeList)
 }
 
-graph <- function(edgeList, originalTweeter){
+graph <- function(edgeList, originalTweeter){                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
   g <- graph_from_edgelist(edgeList)
   V(g)$color <- "black"
   originalTweeterID <- originalTweeter$user_id
