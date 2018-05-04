@@ -7,36 +7,32 @@ library(rgexf)
 # search for specfic tweet
 
 rt <- function(search){
-  searchtext <- search$text
-  retweets_text = grep("RT|via)((?:\\b\\W*@\\w+)+)", searchtext, ignore.case = TRUE)
+  retweets_text <- search$text[search$is_retweet]
+  #retweets_text = grep("RT|via)((?:\\b\\W*@\\w+)+)", searchtext, ignore.case = TRUE)
   return(retweets_text)
 }
 
-non_retweets <- function(search, retweets_text){
-  non_retweets <- setdiff(1:nrow(search), retweets_text)
-  return(non_retweets)
-}
-
-weird_tweets <- function(search, non_retweets){
-  q <- search$is_quote[non_retweets]
-  t <- cbind(q, non_retweets)
-  weird_tweets = vector(mode="character", length=0)
-  quote = vector(mode="character", length=0)
-  for(i in 1:length(q)){
-    if(q[i]==FALSE){
-      weird_tweets <- append(weird_tweets, as.character(t[i,2]))
-    }
-  }
+check <- function(search){
+  weird_tweets <- search$text[search$is_retweet == FALSE 
+                              & search$is_quote == FALSE]
   return(weird_tweets)
 }
 
-rtweetid <- function(search, retweets_text){
-  who_retweet <- as.list(search$user_id[retweets_text])
-  # want to add the quotes too, but it won't work
-  #quote <- setdiff(non_retweets,weird_tweets)
-  #who_retweet <- append(rtweetid, quote)
+originalTweeter2 <- function(status_id){
+  originalTweeter <- lookup_statuses(status_id)$user_id
+}
+
+rtweetid <- function(search, originalTweeter, directory){
+  who_retweet <- search$user_id[search$is_retweet == TRUE | search$is_quote == TRUE]
+  who_retweet <- append(who_retweet, originalTweeter)
+  
+  # original tweeter file
+  originalTweeterFile <- paste0(directory, "/originalTweeter.txt")
+  write.table(originalTweeter, row.names = FALSE, file = originalTweeterFile)
+  
   return(who_retweet)
-  }
+}
+
 
 ###################################################################
 
@@ -68,8 +64,8 @@ initializeFiles <- function(status_id, originalTweeter, directory) {
 }
 
 # get the retweeters from "/statusId_XXXX/userId_XXXX.txt"
-getRetweeters <- function(status_id, directory) {
-  
+getRetweeters <- function(status_id, directory, originalTweeter) {
+ 
   # read all the userId files and get the userIds only, and return it
   searchStr <- paste0(directory, "/userId*")
   files <- Sys.glob(searchStr)
@@ -80,7 +76,8 @@ getRetweeters <- function(status_id, directory) {
 
 
 getFollowers <- function(who_retweet, retweeters, directory){
-  retweetersID <- who_retweet$user_id
+  # used to be retweetersID <- who_reweet$user_id
+  retweetersID <- who_retweet
   
   newRetweeters <- setdiff(retweetersID, retweeters)
   
