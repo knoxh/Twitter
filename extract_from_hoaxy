@@ -1,0 +1,38 @@
+# This is for extracting the Twitter data from Hoaxy
+# This is just a different format. I didn't change any functionality from the other script.
+
+library(rtweet)
+library(readr)
+library(igraph)
+library(dplyr)
+library(rgexf)
+
+# READ ME: Need to change the directory when switching computers
+# read in table from Hoaxy 
+directory <- dir.create("/Users/c90649/Documents/Random")
+tbl <- read.table("hoaxy_data.csv", sep=",", header = T)
+
+# take out unnecessary columns
+tbl$domain=NULL
+tbl$id=NULL
+tbl$site_domain=NULL
+tbl$title=NULL
+tbl$url_id=NULL
+tbl$url_raw=NULL
+
+# get retweets from the hoaxy table 
+non_retweets = list()
+for(row in 1:nrow(tbl)){
+  if(tbl[row,]$tweet_type != "retweet"){
+    non_retweets <- append(non_retweets, row)
+  }
+}
+
+# has all of the data of tweets that are retweets
+non_retweets <- unlist(non_retweets)
+retweet_data = tbl[-non_retweets, ]
+
+# has all of the data of tweets that are no retweets, e.g., mentions
+non_retweet_data = tbl[non_retweets, ]
+
+## FIX ME: finish switching code
