@@ -1,0 +1,163 @@
+library(rtweet)
+library(readr)
+library(igraph)
+library(dplyr)
+library(rgexf)
+
+# trying to search for specfic tweet - not working
+search <- search_tweets("hurricane Florence", n=18000, include_rts = TRUE, retryonratelimit = TRUE)
+non_retweet <- search[-(which(search$is_retweet==TRUE)),]
+non_retweet_text <- non_retweet$text
+
+searchtext <- search$text
+
+# get user info: # of followers and friends
+user_info <- users_data(search)
+
+# summary of friends distribution
+summary(users_data(search)$friends_count)
+
+retweets_text = grep("RT|via)((?:\\b\\W*@\\w+)+)", searchtext, ignore.case = TRUE)
+non_retweets <- setdiff(1:nrow(search), retweets_text)
+quote <- search$is_quote[non_retweets]
+t <- cbind(quote, non_retweets)
+total_quotes <- sum(t[,1])
+not_quote = t[!quote]
+# want to make a list of the elements of "search" that return "FALSE" in "quote"
+# I think I have to put the elements that are FALSE into a list
+# i.e., I want a list of the tweets that are not retweets or quotes so I can look at them
+
+###################################################################
+# Text Mining
+
+library(tidytext)
+library(tidyverse)      # data manipulation & plotting
+library(janeaustenr)
+library(dplyr)
+library(stringr)
+library(sentimentr)
+library(tm)
+
+florence <- read.csv("~/ECSU/Fall 2017/Thesis Proposal/Hoaxy Data/florence.csv")
+
+regex <- "(^|[^@\\w])@(\\w{1,15}):\\b"
+
+# remove if starts with retweet -- Now only looking at non-retweets because only they can have extra text
+cleaning_text <- gsub("RT\\b|via)((?:\\b\\W*@\\w+)+)", "",non_retweet_text, ignore.case = TRUE)
+# FIX ME: want to remove the user names and colon at the beginning
+cleaning_text_more <- gsub(regex, "",cleaning_text, ignore.case = TRUE)
+cleaning_text_most <- gsub(" ?(f|ht)(tp)(s?)(://)(.*)[.|/](.*)", "", cleaning_text_more, ignore.case = T)
+#punct <- gsub('[[:punct:]]', '', cleaning_text_most)
+text <- gsub("\n", "", cleaning_text_most)
+text2 <- str_replace_all(text, "[^[:alnum:]]", " ")
+text2 <- removeNumbers(text2)
+
+# FIX ME: This chunk might not be necessary
+word <- word_tokenizer(tolower(text2))
+for(i in 1:length(word)){
+  index <- try(which(stopwords() %in% word[[i]]), silent=T)
+  word[[i]] <- gsub(stopwords()[index], "", word[[i]])
+}
+
+sentiment <- lapply(text2[1:100], function(x) sentiment(x)$sentiment)
+summary(unlist(as.numeric(sentiment)))
+
+# Using Tidytext package
+text_df <- data.frame(text2)
+get_sentiments("nrc")
+
+
+# FIX ME: need to figure out how to use tidytext
+text_df %>% unnest_tokens(word, text)
+
+
+
+
+##################################################################
+
+
+make_status_directory <- function(path = getwd(), status_id) {
+  directory <- paste0(path,"/statusId_",status_id)
+  dir.create(directory)
+  return(directory)
+}
+
+originalTweeter <- function(status_id){
+  originalTweet <- lookup_statuses(status_id)
+  originalTweeter <- data.frame(user_id = originalTweet$user_id)
+  return(originalTweeter)
+}
+
+initializeFiles <- function(status_id, originalTweeter, directory) {
+  
+  who_retweet <- get_retweeters(status_id=status_id)
+  who_retweet <- bind_rows(originalTweeter, who_retweet)
+  
+  originalTweeterFile <- paste0(directory, "/originalTweeter.txt")
+  write.table(originalTweeter, row.names = FALSE, file = originalTweeterFile)
+  
+  # may not need
+  retweetersFile <- paste0(directory, "/retweeters.txt")
+  write.table(who_retweet, row.names = FALSE, file = retweetersFile)
+  
+  return(who_retweet)
+}
+
+# get the retweeters from "/statusId_XXXX/userId_XXXX.txt"
+getRetweeters <- function(status_id, directory) {
+  
+  # read all the userId files and get the userIds only, and return it
+  searchStr <- paste0(directory, "/userId*")
+  files <- Sys.glob(searchStr)
+  retweeters <- strsplit(files, "userId_")
+  retweeters <- gsub(".txt", "", sapply(retweeters, function(x) x[[2]]))
+  return(retweeters)
+}
+
+
+getFollowers <- function(who_retweet, retweeters, directory){
+  retweetersID <- who_retweet$user_id
+  
+  newRetweeters <- setdiff(retweetersID, retweeters)
+  
+  cat("identified ", length(newRetweeters), " new retweeters\n")
+  
+  for (i in 1:length(newRetweeters)){
+    retweeter <- as.character(newRetweeters[i])
+    followers <- get_followers(retweeter, n= 75000, retryonratelimit = TRUE)
+    fileName <- paste0(directory, "/userId_", retweeter, ".txt")
+    write.table(followers, file = fileName, row.names = FALSE) 
+    limits <- rate_limit("followers/ids")
+    cat("Number of followers for: ", retweeter, nrow(followers), "  ")
+  }
+  return(retweetersID)
+}
+  
+# edge list function
+createEdgeList <- function(directory, retweetersID){
+  searchStr <- paste0(directory, "/userId*")
+  files <- Sys.glob(searchStr)
+  
+  # intersect the files and the list of retweeters
+  for (i in 1:length(retweetersID)){
+    followers <- read_csv(files[i], col_types = cols(user_id = col_character()))
+    common <- intersect(followers$user_id, retweetersID)
+    
+    # edge list
+    if (length(common) >0) {
+      e <- cbind(retweetersID[i], common)
+      edgeList <- rbind(edgeList, e)
+    }
+    colnames(edgeList) <- c("source","target")
+  } 
+  return(edgeList)
+}
+
+graph <- function(edgeList, originalTweeter){
+  g <- graph_from_edgelist(edgeList)
+  V(g)$color <- "black"
+  originalTweeterID <- originalTweeter$user_id
+  V(g)[as.character(originalTweeterID)]$color <- "blue"
+  graph <- plot(as.undirected(g), vertex.size = 6, vertex.label = NA, edge.width = 1, layout = layout.fruchterman.reingold(g))
+  return(graph)
+}
