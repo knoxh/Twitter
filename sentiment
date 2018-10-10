@@ -1,0 +1,84 @@
+source("Clean_tweets.R")
+source("Get_tweets.R")
+
+library(rtweet)
+library(dplyr)
+library(rgexf)
+library(tidytext)
+library(tidyverse)  
+library(stringr)
+library(sentimentr)
+library(tm)
+#####################################################################################
+# The code below calculates and compares the sentiment calculated by tidy to the 
+# base sentiment function 
+
+tidy_sentiment_avg <- list()
+for(i in 1:nrow(tweets)){
+  w <- select(tweets[i,,drop=FALSE], final_clean) %>% unnest_tokens(word, final_clean)
+  s <- w %>% inner_join(get_sentiments("afinn"))
+  tidy_sentiment_avg <- append(tidy_sentiment_avg, mean(s$score))
+}
+
+# put tidy sentiment in the dataframe 
+tidy_sentiment_avg <- unlist(tidy_sentiment_avg)
+tidy_sentiment_avg <- replace_na(as.vector(tidy_sentiment_avg), 0)
+tweets$tidy_sentiment_avg <- tidy_sentiment_avg
+
+# compare the sentiments
+ggplot(data=NULL, aes(tweets$sentiment, tweets$tidy_sentiment_avg)) +
+  geom_point() +
+  theme_classic() +
+  labs(x = "Base sentiment function", y = "Tidy sentiment function", 
+       title = "Comparing Sentiment Methods") +
+  geom_smooth(method="lm")
+##########################################################################
+
+# get sentiment
+sent <- data.frame()
+for(i in 1:nrow(tweets)){
+  sent <- rbind(sent, sentiment(as.character(tweets[i,]$final_clean)))
+}
+
+# get sentiment scores
+tweets$sentiment <- sent$sentiment
+# save the sentiment - takes an hour to run
+write.csv(tweets, "Oct7-sentiment")
+
+#classify as positive or negative
+positive <- filter(tweets, sentiment > 0.1)
+negative <- filter(tweets, sentiment < -0.1)
+
+# rearrange the rows of tweets based on sentiment score
+tweets <- arrange(tweets, desc(sentiment))
+
+# get tweets with retweet count between 10 and 50
+index <- which(tweets$retweet_count < 50 & tweets$retweet_count > 10)
+
+# check that it's working correctly
+tweets[21,]$retweet_count
+
+# most positive tweets
+positive_ids <- which(!is.na(tweets[1:10,]$retweet_status_id))
+positive_retweet_id <- tweets[positive_ids,]$retweet_status_id
+positive_retweet_count <- lookup_statuses(positive_retweet_id)$retweet_count
+rbind(positive_retweet_id, positive_retweet_count)
+
+# most negative tweets
+negative_ids <- which(!is.na(tweets[nrow(tweets)-10:nrow(tweets),]$retweet_status_id))
+negative_retweet_id <- tweets[(nrow(tweets)-10):nrow(tweets),]$retweet_status_id
+negative_retweet_count <- lookup_statuses(negative_retweet_id)$retweet_count
+rbind(negative_retweet_id, negative_retweet_count)
+
+# get tweets that are most positive
+# make categorical variable
+tweets$pos_neg <- if_else(tweets$sentiment > 0, "positive", "negative")
+
+# boxplot of positive vs negative sentiments
+boxplot(positive$sentiment, negative$sentiment, xlab = c("Positive", "Negative"))
+
+# scatterplot of number of retweets vs sentiment score
+ggplot(data = tweets, aes(sentiment, retweet_count)) + 
+  geom_point() +
+  theme_classic() + 
+  labs(x = "Sentiment score", y = "Retweet count", title = "Sentiment score and retweet count") 
